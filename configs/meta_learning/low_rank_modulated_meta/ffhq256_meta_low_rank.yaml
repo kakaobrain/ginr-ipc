@@ -1,0 +1,75 @@
+trainer: stage_inr
+dataset:
+  type: ffhq
+  transforms:
+    type: ffhq256x256
+
+arch: # needs to add encoder, modulation type
+  type: meta_low_rank_modulated_inr
+  ema: null
+
+  rank: [256] # list, assert len(n_weight_groups) in [1, hyponet.n_layer]
+  modulated_layer_idxs: [1]
+  use_factorization: true
+
+  n_inner_step: 2
+  inner_lr: 0.01
+
+  coord_sampler:
+    data_type: image
+    coord_range: [-1.0, 1.0]
+    train_strategy: null
+    val_strategy: null
+
+  hyponet:
+    type: mlp
+    n_layer: 5 # including the output layer
+    hidden_dim: [256] # list, assert len(hidden_dim) in [1, n_layers-1]
+    use_bias: true
+    input_dim: 2
+    output_dim: 3
+    output_bias: 0.5
+    fourier_mapping:
+      type: deterministic_transinr
+      trainable: false
+      use_ff: true
+      ff_sigma: 64
+      ff_dim: 128
+    activation:
+      type: relu
+      siren_w0: null
+    initialization:
+      weight_init_type: kaiming_uniform
+      bias_init_type: zero
+    normalize_weight: true
+
+loss:
+  type: mse #now unnecessary
+  subsample:
+    type: null
+    ratio: 0.1
+  coord_noise: null
+
+optimizer:
+  type: adam
+  init_lr: 0.001
+  weight_decay: 0.0
+  betas: [0.9, 0.999] #[0.9, 0.95]
+  warmup:
+    epoch: 0.5
+    multiplier: 1
+    buffer_epoch: 0
+    min_lr: 0.001
+    mode: fix
+    start_from_zero: True
+  max_gn: null
+
+experiment:
+  amp: True
+  batch_size: 4
+  total_batch_size: 16
+  epochs: 200
+  save_ckpt_freq: 20
+  test_freq: 10
+  test_imlog_freq: 20
+

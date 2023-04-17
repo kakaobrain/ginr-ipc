@@ -1,0 +1,98 @@
+trainer: stage_inr
+dataset:
+  type: librispeech
+  transforms:
+    type: librispeech
+    total_secs: -1
+    patch_secs: 1
+    sampling_rate: 16000 # librispeech is sampled with 16K Hz
+    normalize: false
+    random_crop: true
+    scale: 1.0
+
+arch: # needs to add encoder, modulation type
+  type: transinr
+  ema: null
+
+  n_weight_groups: [64] # list, assert len(n_weight_groups) in [1, hyponet.n_layer]
+  modulated_layer_idxs: null
+
+  coord_sampler:
+    data_type: audio
+    coord_range: [-1.0, 1.0]
+    train_strategy: null
+    val_strategy: null
+
+  data_encoder:
+    type: unfold_audio
+    n_channel: 1
+    trainable: false
+    encoder_spec:
+      patch_size: 200
+      use_padding: true
+
+  latent_mapping: # trainable part
+    type: linear
+    n_patches: 80 # total_secs * sampling_rate / patch_size, 80 per sec
+    n_layer: 1 # if n_layer == 1, only Linear
+    activation: relu # activation of mapping network, n_layer>1
+    hidden_dim: [256] # hidden dimension, valid only when n_layer>1
+    latent_dim: 768 #output dimension
+    use_pe: true
+
+  transformer:
+    n_layer: 6
+    embed_dim: 768
+    block: 
+      n_head: 12
+
+  hyponet:
+    type: mlp
+    n_layer: 5 # including the output layer
+    hidden_dim: [256] # list, assert len(hidden_dim) in [1, n_layers-1]
+    use_bias: true
+    input_dim: 1
+    output_dim: 1
+    output_bias: 0.0
+    fourier_mapping:
+      type: deterministic_transinr
+      trainable: false
+      use_ff: true
+      ff_sigma: 1024
+      ff_dim: 2048
+    activation:
+      type: relu
+      siren_w0: null
+    initialization:
+      weight_init_type: kaiming_uniform
+      bias_init_type: zero
+
+loss:
+  type: mse #now unnecessary
+  subsample:
+    type: null
+    ratio: 0.1
+
+optimizer:
+  type: adam
+  init_lr: 0.0001
+  weight_decay: 0.0
+  betas: [0.9, 0.999] #[0.9, 0.95]
+  warmup:
+    epoch: 0
+    multiplier: 1
+    buffer_epoch: 0
+    min_lr: 0.0001
+    mode: fix
+    start_from_zero: True
+  max_gn: null
+
+experiment:
+  amp: True
+  batch_size: 4
+  total_batch_size: 16
+  epochs: 1000
+  save_ckpt_freq: 50
+  test_freq: 10
+  test_imlog_freq: 10
+

@@ -1,0 +1,92 @@
+trainer: stage_inr
+dataset:
+  type: ffhq
+  transforms:
+    type: ffhq1024x1024
+
+arch: # needs to add encoder, modulation type
+  type: transinr
+  ema: null
+
+  n_weight_groups: [64] # list, assert len(n_weight_groups) in [1, hyponet.n_layer]
+  modulated_layer_idxs: null
+
+  coord_sampler:
+    data_type: image
+    coord_range: [-1.0, 1.0]
+    train_strategy: null
+    val_strategy: null
+
+  data_encoder:
+    type: unfold
+    n_channel: 3
+    trainable: false
+    encoder_spec:
+      patch_size: 32
+      padding: 0
+
+  latent_mapping: # trainable part
+    type: linear
+    n_patches: 1024
+    n_layer: 1 # if n_layer == 1, only Linear
+    activation: relu # activation of mapping network, n_layer>1
+    hidden_dim: [256] # hidden dimension, valid only when n_layer>1
+    latent_dim: 768 #output dimension
+    use_pe: true
+
+  transformer:
+    n_layer: 6
+    embed_dim: 768
+    block: 
+      n_head: 12
+
+  hyponet:
+    type: mlp
+    n_layer: 5 # including the output layer
+    hidden_dim: [256] # list, assert len(hidden_dim) in [1, n_layers-1]
+    use_bias: true
+    input_dim: 2
+    output_dim: 3
+    output_bias: 0.5
+    fourier_mapping:
+      type: deterministic_transinr
+      trainable: false
+      use_ff: true
+      ff_sigma: 256
+      ff_dim: 128
+    activation:
+      type: relu
+      siren_w0: null
+    initialization:
+      weight_init_type: kaiming_uniform
+      bias_init_type: zero
+
+loss:
+  type: mse #now unnecessary
+  subsample:
+    type: random
+    ratio: 0.1
+
+optimizer:
+  type: adam
+  init_lr: 0.0001
+  weight_decay: 0.0
+  betas: [0.9, 0.999] #[0.9, 0.95]
+  warmup:
+    epoch: 0
+    multiplier: 1
+    buffer_epoch: 0
+    min_lr: 0.0001
+    mode: fix
+    start_from_zero: True
+  max_gn: null
+
+experiment:
+  amp: True
+  batch_size: 2
+  total_batch_size: 16
+  epochs: 400
+  save_ckpt_freq: 20
+  test_freq: 10
+  test_imlog_freq: 20
+

@@ -1,0 +1,108 @@
+trainer: stage_inr_nerf
+dataset:
+  type: LearnitShapenet-cars
+  train_config:
+    split: train
+    n_support: 2
+    n_query: 1
+    repeat: 2
+    views_range: [0,25]
+  val_config:
+    split: test
+    n_support: 2
+    n_query: 1
+    repeat: 100
+    views_range: null
+
+arch: # needs to add encoder, modulation type
+  type: low_rank_modulated_transinr_nerf
+  ema: null
+
+  n_weight_groups: [256] # list, assert len(n_weight_groups) in [1, hyponet.n_layer]
+  modulated_layer_idxs: [1]
+
+  coord_sampler:
+    data_type: nvs
+    coord_range: [-1.0, 1.0]
+    num_points_per_ray: 128
+    train_strategy: null
+    val_strategy: null
+
+  data_encoder:
+    type: unfold
+    n_channel: 9 # rgb + ray_o + ray_d
+    trainable: false
+    encoder_spec:
+      patch_size: 8
+      padding: 0
+
+  latent_mapping: # trainable part
+    type: linear
+    n_patches: 512
+    n_layer: 1 # if n_layer == 1, only Linear
+    activation: relu # activation of mapping network, n_layer>1
+    hidden_dim: [256] # hidden dimension, valid only when n_layer>1
+    latent_dim: 768 #output dimension
+    use_pe: true
+
+  transformer:
+    n_layer: 6
+    embed_dim: 768
+    block: 
+      n_head: 12
+
+  hyponet:
+    type: mlp
+    n_layer: 6 # including the output layer
+    hidden_dim: [256] # list, assert len(hidden_dim) in [1, n_layers-1]
+    use_bias: true
+    input_dim: 3
+    output_dim: 4
+    output_bias: 0.0 # hyponet for nerf does not use output bias, but use sigmoid activation for rgb
+    fourier_mapping:
+      type: deterministic_transinr_nerf
+      trainable: false
+      use_ff: true
+      ff_sigma: 8
+      ff_dim: 60 # 20 dim per x, y, z
+    activation:
+      type: relu
+      siren_w0: null
+    initialization:
+      weight_init_type: kaiming_uniform
+      bias_init_type: zero
+
+loss:
+  type: mse #now unnecessary
+  subsample:
+    type: adaptive_random # random | adaptive_random | null
+    train_num_rays: 128 # int | null
+    use_adaptive_sample_ray: true
+    end_epoch_adaptive_sample_ray: 1
+
+optimizer:
+  type: adam
+  init_lr: 0.0001
+  weight_decay: 0.0
+  betas: [0.9, 0.999] #[0.9, 0.95]
+  warmup:
+    epoch: 0
+    multiplier: 1
+    buffer_epoch: 0
+    min_lr: 0.0001
+    mode: fix
+    start_from_zero: true
+  max_gn: null
+
+experiment:
+  amp: True
+  batch_size: 8
+  total_batch_size: 32
+  subsample_during_eval: True
+  ray_subbatch_size_eval: 1024
+  epochs: 1000
+  save_ckpt_freq: 100
+  test_freq: 20
+  test_all_rays_freq: 200
+  test_imlog_freq: 100
+
